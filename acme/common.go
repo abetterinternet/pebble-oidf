@@ -12,15 +12,20 @@ const (
 	StatusReady       = "ready"
 	StatusDeactivated = "deactivated"
 
-	IdentifierDNS = "dns"
-	IdentifierIP  = "ip"
+	IdentifierDNS              = "dns"
+	IdentifierIP               = "ip"
+	IdentifierOpenIDFederation = "openid-federation"
 
-	ChallengeHTTP01       = "http-01"
-	ChallengeTLSALPN01    = "tls-alpn-01"
-	ChallengeDNS01        = "dns-01"
-	ChallengeDNSAccount01 = "dns-account-01"
+	ChallengeHTTP01             = "http-01"
+	ChallengeTLSALPN01          = "tls-alpn-01"
+	ChallengeDNS01              = "dns-01"
+	ChallengeDNSAccount01       = "dns-account-01"
+	ChallengeOpenIDFederation01 = "openid-federation-01"
 
 	HTTP01BaseURL = ".well-known/acme-challenge/"
+	// The path from which an OpenID Federation Entity's Entity Configuration can be fetched
+	// https://openid.net/specs/openid-federation-1_0-41.html#name-federation-entity-configura
+	OpenIDFederation01BaseURL = ".well-known/openid-federation"
 
 	ACMETLS1Protocol = "acme-tls/1"
 )
