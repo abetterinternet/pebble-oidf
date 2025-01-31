@@ -33,6 +33,7 @@ import (
 	"github.com/letsencrypt/pebble/v2/ca"
 	"github.com/letsencrypt/pebble/v2/core"
 	"github.com/letsencrypt/pebble/v2/db"
+	"github.com/letsencrypt/pebble/v2/openidfederation"
 	"github.com/letsencrypt/pebble/v2/va"
 )
 
@@ -871,6 +872,8 @@ func (wfe *WebFrontEndImpl) verifyPOST(
 		return nil, prob
 	}
 
+	wfe.log.Printf("request body: %s", string(result.body))
+
 	return result, nil
 }
 
@@ -1436,7 +1439,8 @@ func (wfe *WebFrontEndImpl) verifyOrder(order *core.Order) *acme.ProblemDetails 
 	if len(idents) == 0 {
 		return acme.MalformedProblem("Order did not specify any identifiers")
 	}
-	// Check that all of the identifiers in the new-order are DNS or IPaddress type
+	// Check that all of the identifiers in the new-order are DNS, IPaddress or OpenID Federation
+	// type
 	// Validity check of ipaddresses are done here.
 	for _, ident := range idents {
 		if ident.Type == acme.IdentifierIP {
@@ -1444,6 +1448,16 @@ func (wfe *WebFrontEndImpl) verifyOrder(order *core.Order) *acme.ProblemDetails 
 				return acme.MalformedProblem(fmt.Sprintf(
 					"Order included malformed IP type identifier value: %q\n",
 					ident.Value))
+			}
+			continue
+		}
+		if ident.Type == acme.IdentifierOpenIDFederation {
+			if len(idents) > 1 {
+				return acme.MalformedProblem("Orders including OpenID Federation entities may not contain any other identifiers")
+			}
+
+			if _, err := openidfederation.NewEntityIdentifier(ident.Value); err != nil {
+				return acme.MalformedProblem(fmt.Sprintf("Invalid identifier in order: %s", err.Error()))
 			}
 			continue
 		}
@@ -1743,6 +1757,7 @@ func (wfe *WebFrontEndImpl) NewOrder(
 		return
 	}
 
+	var uniquenames []acme.Identifier
 	var orderDNSs []string
 	var orderIPs []net.IP
 	for _, ident := range newOrder.Identifiers {
@@ -1751,15 +1766,17 @@ func (wfe *WebFrontEndImpl) NewOrder(
 			orderDNSs = append(orderDNSs, ident.Value)
 		case acme.IdentifierIP:
 			orderIPs = append(orderIPs, net.ParseIP(ident.Value))
+		case acme.IdentifierOpenIDFederation:
+			uniquenames = append(uniquenames, ident)
 		default:
 			wfe.sendError(acme.MalformedProblem(
 				fmt.Sprintf("Order includes unknown identifier type %s", ident.Type)), response)
 			return
 		}
 	}
+
 	orderDNSs = uniqueLowerNames(orderDNSs)
 	orderIPs = uniqueIPs(orderIPs)
-	var uniquenames []acme.Identifier
 	for _, name := range orderDNSs {
 		uniquenames = append(uniquenames, acme.Identifier{Value: name, Type: acme.IdentifierDNS})
 	}
