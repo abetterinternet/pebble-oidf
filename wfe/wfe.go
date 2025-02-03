@@ -1630,7 +1630,10 @@ func (wfe *WebFrontEndImpl) makeChallenges(authz *core.Authorization, request *h
 
 	// Determine which challenge types are enabled for this identifier
 	var enabledChallenges []string
-	if strings.HasPrefix(authz.Identifier.Value, "*.") {
+	if authz.Identifier.Type == acme.IdentifierOpenIDFederation {
+		// Authorizations for OpenID Federation entities may only use OpenID Federation challenge
+		enabledChallenges = []string{acme.ChallengeOpenIDFederation01}
+	} else if strings.HasPrefix(authz.Identifier.Value, "*.") {
 		// Authorizations for a wildcard identifier get DNS-based challenges to
 		// match Boulder/Let's Encrypt wildcard issuance policy
 		enabledChallenges = []string{acme.ChallengeDNS01, acme.ChallengeDNSAccount01}
