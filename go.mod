@@ -1,13 +1,12 @@
 module github.com/letsencrypt/pebble/v2
 
-go 1.22.0
-
-toolchain go1.23.1
+go 1.23.5
 
 require (
 	github.com/go-jose/go-jose/v4 v4.0.4
 	github.com/letsencrypt/challtestsrv v1.3.2
 	github.com/miekg/dns v1.1.62
+	github.com/tgeoghegan/oidf-box v0.0.1
 )
 
 require (
@@ -18,3 +17,5 @@ require (
 	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/tools v0.29.0 // indirect
 )
+
+replace github.com/tgeoghegan/oidf-box => ../oidf-box
