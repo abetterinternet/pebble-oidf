@@ -33,8 +33,9 @@ import (
 	"github.com/letsencrypt/pebble/v2/ca"
 	"github.com/letsencrypt/pebble/v2/core"
 	"github.com/letsencrypt/pebble/v2/db"
-	"github.com/letsencrypt/pebble/v2/openidfederation"
 	"github.com/letsencrypt/pebble/v2/va"
+	"github.com/tgeoghegan/oidf-box/entity"
+	"github.com/tgeoghegan/oidf-box/openidfederation01"
 )
 
 const (
@@ -872,8 +873,6 @@ func (wfe *WebFrontEndImpl) verifyPOST(
 		return nil, prob
 	}
 
-	wfe.log.Printf("request body: %s", string(result.body))
-
 	return result, nil
 }
 
@@ -1456,7 +1455,7 @@ func (wfe *WebFrontEndImpl) verifyOrder(order *core.Order) *acme.ProblemDetails 
 				return acme.MalformedProblem("Orders including OpenID Federation entities may not contain any other identifiers")
 			}
 
-			if _, err := openidfederation.NewEntityIdentifier(ident.Value); err != nil {
+			if _, err := entity.NewIdentifier(ident.Value); err != nil {
 				return acme.MalformedProblem(fmt.Sprintf("Invalid identifier in order: %s", err.Error()))
 			}
 			continue
@@ -2121,12 +2120,29 @@ func (wfe *WebFrontEndImpl) FinalizeOrder( //nolint:gocyclo,gocognit
 	// split order identifiers per types
 	var orderDNSs []string
 	var orderIPs []net.IP
+	var orderOpenIDFederationIdentifier *entity.Identifier
 	for _, ident := range orderIdentifiers {
 		switch ident.Type {
 		case acme.IdentifierDNS:
 			orderDNSs = append(orderDNSs, ident.Value)
 		case acme.IdentifierIP:
 			orderIPs = append(orderIPs, net.ParseIP(ident.Value))
+		case acme.IdentifierOpenIDFederation:
+			if len(orderIdentifiers) > 1 {
+				wfe.sendError(acme.MalformedProblem(
+					"Order containing OpenID Federation identifier may only contain a single identifier",
+				), response)
+				return
+			}
+			localOrderOpenIDFederationIdentifier, err := entity.NewIdentifier(ident.Value)
+			if err != nil {
+				wfe.sendError(acme.MalformedProblem(
+					fmt.Sprintf("Order includes invalid OpenID Federation entity identifier: %s", err.Error()),
+				), response)
+				return
+			}
+
+			orderOpenIDFederationIdentifier = &localOrderOpenIDFederationIdentifier
 		default:
 			wfe.sendError(acme.MalformedProblem(
 				fmt.Sprintf("Order includes unknown identifier type %s", ident.Type)), response)
@@ -2140,6 +2156,13 @@ func (wfe *WebFrontEndImpl) FinalizeOrder( //nolint:gocyclo,gocognit
 	// sort and deduplicate CSR SANs
 	csrDNSs := uniqueLowerNames(parsedCSR.DNSNames)
 	csrIPs := uniqueIPs(parsedCSR.IPAddresses)
+	openIDFederationIdentifier, err := openidfederation01.EntityIdentifierFromCSR(parsedCSR)
+	if err != nil {
+		wfe.sendError(acme.MalformedProblem(
+			fmt.Sprintf("CSR does not contain valid OpenID Federation identifier: %s", err.Error()),
+		), response)
+		return
+	}
 
 	// Check that the CSR has the same number of names as the initial order contained
 	if len(csrDNSs) != len(orderDNSs) {
@@ -2150,6 +2173,14 @@ func (wfe *WebFrontEndImpl) FinalizeOrder( //nolint:gocyclo,gocognit
 	if len(csrIPs) != len(orderIPs) {
 		wfe.sendError(acme.UnauthorizedProblem(
 			"Order includes different number of IP address identifiers than CSR specifies"), response)
+		return
+	}
+
+	if orderOpenIDFederationIdentifier != nil && (len(csrIPs) > 0 || len(csrDNSs) > 0) {
+		// ACME 7.4 makes it clear that badCSR should be used in this case, not sure why Pebble uses
+		// UnauthorizedProblem elsewhere
+		wfe.sendError(acme.BadCSRProblem(
+			"CSR containing OpenID Federation identifier should only contain otherName SAN"), response)
 		return
 	}
 
@@ -2167,6 +2198,11 @@ func (wfe *WebFrontEndImpl) FinalizeOrder( //nolint:gocyclo,gocognit
 				fmt.Sprintf("CSR is missing Order IP %q", IP)), response)
 			return
 		}
+	}
+	if !orderOpenIDFederationIdentifier.Equals(openIDFederationIdentifier) {
+		wfe.sendError(acme.MalformedProblem(
+			"order and CSR OpenID Federation identifier differ"), response)
+		return
 	}
 
 	// No account key signing RFC8555 Section 11.1
@@ -2470,7 +2506,10 @@ func (wfe *WebFrontEndImpl) validateAuthzForChallenge(authz *core.Authorization)
 	defer authz.RUnlock()
 
 	ident := authz.Identifier
-	if ident.Type != acme.IdentifierDNS && ident.Type != acme.IdentifierIP {
+	if !slices.Contains(
+		[]string{acme.IdentifierDNS, acme.IdentifierIP, acme.IdentifierOpenIDFederation},
+		ident.Type,
+	) {
 		return nil, acme.MalformedProblem(
 			fmt.Sprintf("Authorization identifier was type %s, only %s and %s are supported",
 				ident.Type, acme.IdentifierDNS, acme.IdentifierIP))
@@ -2501,48 +2540,50 @@ func (wfe *WebFrontEndImpl) updateChallenge(
 		return
 	}
 
-	// In strict mode we reject any challenge POST with a body other than `{}`.
-	// This matches RFC 8555 Section 7.5.1 and the ACME challenge types that
-	// Pebble has implemented. Per ACME errata 5729[0] it may not be true for
-	// extensions to ACME that add new challenge types.
-	//
-	// [0]: https://www.rfc-editor.org/errata/eid5729
-	if wfe.strict && !bytes.Equal(postData.body, []byte("{}")) {
-		wfe.sendError(
-			acme.MalformedProblem(`challenge initiation POST JWS body was not "{}"`), response)
-		return
-	}
-
-	// When not in strict mode we still want to be strict about the legacy key
-	// authorization field not being present in the POST JSON.
-	var chalResp struct {
-		KeyAuthorization *string
-	}
-	err := json.Unmarshal(postData.body, &chalResp)
-	if err != nil {
-		wfe.sendError(
-			acme.MalformedProblem("Error unmarshaling body JSON"), response)
-		return
-	}
-
-	// Historically challenges were updated by POSTing a KeyAuthorization. This is
-	// unnecessary, the server can calculate this itself. We could ignore this if
-	// sent (and that's what Boulder will do) but for Pebble we'd like to offer
-	// a way to be more aggressive about pushing clients implementations in the
-	// right direction, so we treat this as a malformed request.
-	if chalResp.KeyAuthorization != nil {
-		wfe.sendError(
-			acme.MalformedProblem(
-				"Challenge response body contained legacy KeyAuthorization field, "+
-					"POST body should be `{}`"), response)
-		return
-	}
-
 	chalID := strings.TrimPrefix(request.URL.Path, challengePath)
 	existingChal := wfe.db.GetChallengeByID(chalID)
 	if existingChal == nil {
 		response.WriteHeader(http.StatusNotFound)
 		return
+	}
+
+	if existingChal.Type != acme.ChallengeOpenIDFederation01 {
+		// In strict mode we reject any challenge POST with a body other than `{}`.
+		// This matches RFC 8555 Section 7.5.1 and the ACME challenge types that
+		// Pebble has implemented. Per ACME errata 5729[0] it may not be true for
+		// extensions to ACME that add new challenge types.
+		//
+		// [0]: https://www.rfc-editor.org/errata/eid5729
+		if wfe.strict && !bytes.Equal(postData.body, []byte("{}")) {
+			wfe.sendError(
+				acme.MalformedProblem(`challenge initiation POST JWS body was not "{}"`), response)
+			return
+		}
+
+		// When not in strict mode we still want to be strict about the legacy key
+		// authorization field not being present in the POST JSON.
+		var chalResp struct {
+			KeyAuthorization *string
+		}
+		err := json.Unmarshal(postData.body, &chalResp)
+		if err != nil {
+			wfe.sendError(
+				acme.MalformedProblem("Error unmarshaling body JSON"), response)
+			return
+		}
+
+		// Historically challenges were updated by POSTing a KeyAuthorization. This is
+		// unnecessary, the server can calculate this itself. We could ignore this if
+		// sent (and that's what Boulder will do) but for Pebble we'd like to offer
+		// a way to be more aggressive about pushing clients implementations in the
+		// right direction, so we treat this as a malformed request.
+		if chalResp.KeyAuthorization != nil {
+			wfe.sendError(
+				acme.MalformedProblem(
+					"Challenge response body contained legacy KeyAuthorization field, "+
+						"POST body should be `{}`"), response)
+			return
+		}
 	}
 
 	authz, prob := wfe.validateChallengeUpdate(existingChal)
@@ -2620,13 +2661,13 @@ func (wfe *WebFrontEndImpl) updateChallenge(
 	acctURL := wfe.relativeEndpoint(request, fmt.Sprintf("%s%s", acctPath, existingAcct.ID))
 
 	// Submit a validation job to the VA, this will be processed asynchronously
-	wfe.va.ValidateChallenge(ident, existingChal, existingAcct, acctURL, wildcard)
+	wfe.va.ValidateChallenge(ident, existingChal, existingAcct, acctURL, wildcard, postData.body)
 
 	// Lock the challenge for reading in order to write the response
 	existingChal.RLock()
 	defer existingChal.RUnlock()
 	response.Header().Add("Link", link(existingChal.Authz.URL, "up"))
-	err = wfe.writeJSONResponse(response, http.StatusOK, existingChal.Challenge)
+	err := wfe.writeJSONResponse(response, http.StatusOK, existingChal.Challenge)
 	if err != nil {
 		wfe.sendError(acme.InternalErrorProblem("Error marshaling challenge"), response)
 		return

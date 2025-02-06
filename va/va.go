@@ -9,6 +9,7 @@ import (
 	"encoding/asn1"
 	"encoding/base32"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -23,6 +24,7 @@ import (
 	"time"
 
 	"github.com/miekg/dns"
+	"github.com/tgeoghegan/oidf-box/openidfederation01"
 
 	"github.com/letsencrypt/challtestsrv"
 	"github.com/letsencrypt/pebble/v2/acme"
@@ -91,11 +93,12 @@ func certNames(cert *x509.Certificate) string {
 }
 
 type vaTask struct {
-	Identifier acme.Identifier
-	Challenge  *core.Challenge
-	Account    *core.Account
-	AccountURL string
-	Wildcard   bool
+	Identifier        acme.Identifier
+	Challenge         *core.Challenge
+	Account           *core.Account
+	AccountURL        string
+	Wildcard          bool
+	ChallengeResponse []byte
 }
 
 type VAImpl struct {
@@ -168,13 +171,14 @@ func New(
 	return va
 }
 
-func (va VAImpl) ValidateChallenge(ident acme.Identifier, chal *core.Challenge, acct *core.Account, acctURL string, wildcard bool) {
+func (va VAImpl) ValidateChallenge(ident acme.Identifier, chal *core.Challenge, acct *core.Account, acctURL string, wildcard bool, chalResp []byte) {
 	task := &vaTask{
-		Identifier: ident,
-		Challenge:  chal,
-		Account:    acct,
-		AccountURL: acctURL,
-		Wildcard:   wildcard,
+		Identifier:        ident,
+		Challenge:         chal,
+		Account:           acct,
+		AccountURL:        acctURL,
+		Wildcard:          wildcard,
+		ChallengeResponse: chalResp,
 	}
 	// Submit the task for validation
 	va.tasks <- task
@@ -321,6 +325,8 @@ func (va VAImpl) performValidation(task *vaTask, results chan<- *core.Validation
 		results <- va.validateDNS01(task)
 	case acme.ChallengeDNSAccount01:
 		results <- va.validateDNSAccount01(task)
+	case acme.ChallengeOpenIDFederation01:
+		results <- va.validateOpenIDFederation01(task)
 	default:
 		va.log.Printf("Error: performValidation(): Invalid challenge type: %q", task.Challenge.Type)
 	}
@@ -717,6 +723,42 @@ func (va VAImpl) resolveIP(name string) ([]string, error) {
 	}
 
 	return addrs, nil
+}
+
+// validateOpenIDFederation01 validates an OpenID Federation type challenge.
+func (va VAImpl) validateOpenIDFederation01(task *vaTask) *core.ValidationRecord {
+	result := &core.ValidationRecord{
+		URL:         task.Identifier.Value,
+		ValidatedAt: time.Now(),
+	}
+
+	// For OpenIDFederation01 challenges, we expect to find a POST body containing fields `sig`
+	// and optionally `trust_chain`
+	// https://peppelinux.github.io/draft-demarco-acme-openid-federation/draft-demarco-acme-openid-federation.html#section-6.6
+	var chalResp openidfederation01.ChallengeResponse
+	if err := json.Unmarshal(task.ChallengeResponse, &chalResp); err != nil {
+		// For error responses, the acme-openid draft punts to RFC 8555 7.5.1. That in turn is not
+		// particularly prescriptive, just saying "the server MUST return an HTTP error". A
+		// malformed problem document seems appropriate but HTTP 400 would suffice.
+		result.Error = acme.MalformedProblem("Error unmarshaling body JSON")
+		return result
+	}
+
+	if chalResp.Sig == "" {
+		result.Error = acme.MalformedProblem("Signature missing from challenge response")
+		return result
+	}
+
+	// TODO(timg): check for and validate the trust_chain field to short circuit fetching all the
+	// ECs
+
+	// TODO(timg) if trust_chain is missing, do OIDF discovery and validate trust chain
+
+	// Check signature in challenge respose is valid for requestor EC
+
+	va.log.Printf("HACK: succeeding validation for %s", task.Identifier.Value)
+
+	return result
 }
 
 // reverseaddr function is borrowed from net/dnsclient.go[0] and the Go std library.

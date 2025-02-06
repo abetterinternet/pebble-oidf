@@ -112,6 +112,18 @@ func makeKey() (*rsa.PrivateKey, []byte, error) {
 	return key, ski, nil
 }
 
+// sanExtension finds the first SubjectAlternativeName among the provided extension and returns it,
+// or nil if no SAN is found.
+func sanExtension(extensions []pkix.Extension) *pkix.Extension {
+	for _, extension := range extensions {
+		if extension.Id.Equal(asn1.ObjectIdentifier{2, 5, 29, 17}) {
+			return &extension
+		}
+	}
+
+	return nil
+}
+
 func (ca *CAImpl) makeCACert(
 	subjectKey crypto.Signer,
 	subject pkix.Name,
@@ -258,8 +270,9 @@ func (ca *CAImpl) newChain(intermediateKey crypto.Signer, intermediateSubject pk
 }
 
 func (ca *CAImpl) newCertificate(domains []string, ips []net.IP, key crypto.PublicKey, accountID, notBefore, notAfter, profileName string, extensions []pkix.Extension) (*core.Certificate, error) {
-	if len(domains) == 0 && len(ips) == 0 {
-		return nil, errors.New("must specify at least one domain name or IP address")
+	if len(domains) == 0 && len(ips) == 0 && sanExtension(extensions) == nil {
+		return nil, errors.New(
+			"must specify at least one domain name or IP address or SubjectAlternativeName")
 	}
 
 	defaultChain := ca.chains[0].intermediates
@@ -427,6 +440,23 @@ func (ca *CAImpl) CompleteOrder(order *core.Order) {
 		// If the user requested an OCSP Must-Staple extension, use our
 		// pre-baked one to ensure a reasonable value for Critical
 		extensions = append(extensions, ocspMustStapleExt)
+	}
+
+	for _, identifier := range order.Identifiers {
+		if identifier.Type != acme.IdentifierOpenIDFederation {
+			continue
+		}
+		sanExtension := sanExtension(order.ParsedCSR.Extensions)
+		if sanExtension == nil {
+			// Should never happen, as the CSR was validated previously
+			ca.log.Printf(
+				"order contains OpenID Federation identifier, but no SAN extension was found in CSR")
+			return
+		}
+		// Unlike the OCSPMustStaple extension, we copy the SAN over wholesale from the CSR, and
+		// assume that it's validity (e.g. that it's an otherName with id-on-openfederationid) has
+		// already been checked.
+		extensions = append(extensions, *sanExtension)
 	}
 
 	// issue a certificate for the csr
