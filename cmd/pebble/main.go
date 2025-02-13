@@ -14,6 +14,7 @@ import (
 	"github.com/letsencrypt/pebble/v2/db"
 	"github.com/letsencrypt/pebble/v2/va"
 	"github.com/letsencrypt/pebble/v2/wfe"
+	"github.com/tgeoghegan/oidf-box/entity"
 )
 
 var version = "dev" // Default value, to be overridden with ldflags
@@ -41,6 +42,11 @@ type config struct {
 
 		// Deprecated: use Profiles.ValidityPeriod instead
 		CertificateValidityPeriod uint64
+		OpenIDFederation          struct {
+			Identifier   string
+			TrustAnchors []string
+			Superiors    []string
+		}
 	}
 }
 
@@ -151,9 +157,36 @@ func main() {
 		logger.Print("Management interface is disabled")
 	}
 
+	acmeDirectory := fmt.Sprintf("https://%s%s", c.Pebble.ListenAddress, wfe.DirectoryPath)
+
+	if c.Pebble.OpenIDFederation.Identifier != "" {
+		// Create an acme_issuer OIDF entity for Pebble to serve, and subordinate it to the
+		// superiors in the config
+		issuer, err := entity.NewAndServe(c.Pebble.OpenIDFederation.Identifier, entity.EntityOptions{
+			TrustAnchors: c.Pebble.OpenIDFederation.TrustAnchors,
+			ACMEIssuer:   acmeDirectory,
+		})
+		cmd.FailOnError(err, "Failed to set up OpenID Federation entity for acme_issuer")
+		defer issuer.CleanUp()
+
+		oidfClient := entity.NewOIDFClient()
+
+		for _, superior := range c.Pebble.OpenIDFederation.Superiors {
+			superiorIdentifier, err := entity.NewIdentifier(superior)
+			cmd.FailOnError(err, "bad superior OIDF identifier")
+			superiorClient, err := oidfClient.NewFederationEndpoints(superiorIdentifier)
+			cmd.FailOnError(err, "failed to create federation endpoints")
+
+			err = superiorClient.AddSubordinates([]entity.Identifier{issuer.Identifier})
+			cmd.FailOnError(err, "failed to subordinate issuer entity")
+			issuer.AddSuperior(superiorIdentifier)
+		}
+
+		logger.Printf("OpenIDFederation endpoints listening on %s\n", c.Pebble.OpenIDFederation.Identifier)
+	}
+
 	logger.Printf("Listening on: %s\n", c.Pebble.ListenAddress)
-	logger.Printf("ACME directory available at: https://%s%s",
-		c.Pebble.ListenAddress, wfe.DirectoryPath)
+	logger.Printf("ACME directory available at: %s", acmeDirectory)
 	err = http.ListenAndServeTLS(
 		c.Pebble.ListenAddress,
 		c.Pebble.Certificate,
