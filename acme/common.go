@@ -23,9 +23,6 @@ const (
 	ChallengeOpenIDFederation01 = "openid-federation-01"
 
 	HTTP01BaseURL = ".well-known/acme-challenge/"
-	// The path from which an OpenID Federation Entity's Entity Configuration can be fetched
-	// https://openid.net/specs/openid-federation-1_0-41.html#name-federation-entity-configura
-	OpenIDFederation01BaseURL = ".well-known/openid-federation"
 
 	ACMETLS1Protocol = "acme-tls/1"
 )
