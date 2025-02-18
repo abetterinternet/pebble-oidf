@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/miekg/dns"
+	"github.com/tgeoghegan/oidf-box/entity"
 	"github.com/tgeoghegan/oidf-box/openidfederation01"
 
 	"github.com/letsencrypt/challtestsrv"
@@ -112,6 +113,7 @@ type VAImpl struct {
 	strict             bool
 	customResolverAddr string
 	dnsClient          *dns.Client
+	oidfEntity         *entity.Entity
 
 	// The VA having a DB client is indeed strange. This is only used to
 	// facilitate va.setOrderError changing the ARI related order replacement
@@ -123,6 +125,7 @@ func New(
 	log *log.Logger,
 	httpPort, tlsPort int,
 	strict bool, customResolverAddr string,
+	oidfEntity *entity.Entity,
 	db *db.MemoryStore,
 ) *VAImpl {
 	va := &VAImpl{
@@ -134,6 +137,7 @@ func New(
 		sleepTime:          defaultSleepTime,
 		strict:             strict,
 		customResolverAddr: customResolverAddr,
+		oidfEntity:         oidfEntity,
 		db:                 db,
 	}
 
@@ -749,14 +753,35 @@ func (va VAImpl) validateOpenIDFederation01(task *vaTask) *core.ValidationRecord
 		return result
 	}
 
-	// TODO(timg): check for and validate the trust_chain field to short circuit fetching all the
-	// ECs
+	requestorEntity, err := entity.NewIdentifier(task.Identifier.Value)
+	if err != nil {
+		result.Error = acme.UnauthorizedProblem(
+			fmt.Sprintf("failed to construct OpenID Federation identifier for '%s': %s",
+				task.Identifier.Value, err),
+		)
+		return result
+	}
 
-	// TODO(timg) if trust_chain is missing, do OIDF discovery and validate trust chain
+	var trustErr error
+	var trustChain []entity.EntityStatement
 
-	// Check signature in challenge respose is valid for requestor EC
+	if chalResp.TrustChain != nil {
+		trustChain, trustErr = va.oidfEntity.EvaluateTrustChain(chalResp.TrustChain)
+	} else {
+		trustChain, trustErr = va.oidfEntity.EvaluateTrust(requestorEntity)
+	}
+	if trustErr != nil {
+		result.Error = acme.UnauthorizedProblem(
+			fmt.Sprintf("could not establish OpenID Federation trust for '%s': %s",
+				task.Identifier.Value, err),
+		)
+		return result
+	}
 
-	va.log.Printf("HACK: succeeding validation for %s", task.Identifier.Value)
+	if err := trustChain[0].VerifyChallenge(chalResp.Sig, task.Challenge.Token); err != nil {
+		result.Error = acme.UnauthorizedProblem(fmt.Sprintf("could not verify challenge: %s", err))
+		return result
+	}
 
 	return result
 }

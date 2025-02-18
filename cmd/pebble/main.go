@@ -119,9 +119,39 @@ func main() {
 		}
 	}
 
+	acmeDirectory := fmt.Sprintf("https://%s%s", c.Pebble.ListenAddress, wfe.DirectoryPath)
+
+	var issuer *entity.Entity
+	if c.Pebble.OpenIDFederation.Identifier != "" {
+		// Create an acme_issuer OIDF entity for Pebble to serve, and subordinate it to the
+		// superiors in the config
+		var err error
+		issuer, err = entity.NewAndServe(c.Pebble.OpenIDFederation.Identifier, entity.EntityOptions{
+			TrustAnchors: c.Pebble.OpenIDFederation.TrustAnchors,
+			ACMEIssuer:   acmeDirectory,
+		})
+		cmd.FailOnError(err, "Failed to set up OpenID Federation entity for acme_issuer")
+		defer issuer.CleanUp()
+
+		oidfClient := entity.NewOIDFClient()
+
+		for _, superior := range c.Pebble.OpenIDFederation.Superiors {
+			superiorIdentifier, err := entity.NewIdentifier(superior)
+			cmd.FailOnError(err, "bad superior OIDF identifier")
+			superiorClient, err := oidfClient.NewFederationEndpoints(superiorIdentifier)
+			cmd.FailOnError(err, "failed to create federation endpoints")
+
+			err = superiorClient.AddSubordinates([]entity.Identifier{issuer.Identifier})
+			cmd.FailOnError(err, "failed to subordinate issuer entity")
+			issuer.AddSuperior(superiorIdentifier)
+		}
+
+		logger.Printf("OpenIDFederation endpoints listening on %s\n", c.Pebble.OpenIDFederation.Identifier)
+	}
+
 	db := db.NewMemoryStore()
 	ca := ca.New(logger, db, c.Pebble.OCSPResponderURL, alternateRoots, chainLength, profiles)
-	va := va.New(logger, c.Pebble.HTTPPort, c.Pebble.TLSPort, *strictMode, *resolverAddress, db)
+	va := va.New(logger, c.Pebble.HTTPPort, c.Pebble.TLSPort, *strictMode, *resolverAddress, issuer, db)
 
 	for keyID, key := range c.Pebble.ExternalAccountMACKeys {
 		err := db.AddExternalAccountKeyByID(keyID, key)
@@ -155,34 +185,6 @@ func main() {
 		}
 	} else {
 		logger.Print("Management interface is disabled")
-	}
-
-	acmeDirectory := fmt.Sprintf("https://%s%s", c.Pebble.ListenAddress, wfe.DirectoryPath)
-
-	if c.Pebble.OpenIDFederation.Identifier != "" {
-		// Create an acme_issuer OIDF entity for Pebble to serve, and subordinate it to the
-		// superiors in the config
-		issuer, err := entity.NewAndServe(c.Pebble.OpenIDFederation.Identifier, entity.EntityOptions{
-			TrustAnchors: c.Pebble.OpenIDFederation.TrustAnchors,
-			ACMEIssuer:   acmeDirectory,
-		})
-		cmd.FailOnError(err, "Failed to set up OpenID Federation entity for acme_issuer")
-		defer issuer.CleanUp()
-
-		oidfClient := entity.NewOIDFClient()
-
-		for _, superior := range c.Pebble.OpenIDFederation.Superiors {
-			superiorIdentifier, err := entity.NewIdentifier(superior)
-			cmd.FailOnError(err, "bad superior OIDF identifier")
-			superiorClient, err := oidfClient.NewFederationEndpoints(superiorIdentifier)
-			cmd.FailOnError(err, "failed to create federation endpoints")
-
-			err = superiorClient.AddSubordinates([]entity.Identifier{issuer.Identifier})
-			cmd.FailOnError(err, "failed to subordinate issuer entity")
-			issuer.AddSuperior(superiorIdentifier)
-		}
-
-		logger.Printf("OpenIDFederation endpoints listening on %s\n", c.Pebble.OpenIDFederation.Identifier)
 	}
 
 	logger.Printf("Listening on: %s\n", c.Pebble.ListenAddress)
