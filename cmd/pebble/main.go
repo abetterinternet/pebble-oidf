@@ -128,7 +128,7 @@ func main() {
 		var err error
 		issuer, err = entity.NewAndServe(c.Pebble.OpenIDFederation.Identifier, entity.EntityOptions{
 			TrustAnchors: c.Pebble.OpenIDFederation.TrustAnchors,
-			ACMEIssuer:   acmeDirectory,
+			ACMEIssuer:   &entity.ACMEIssuerOptions{DirectoryURL: acmeDirectory},
 		})
 		cmd.FailOnError(err, "Failed to set up OpenID Federation entity for acme_issuer")
 		defer issuer.CleanUp()
