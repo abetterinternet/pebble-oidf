@@ -1451,10 +1451,6 @@ func (wfe *WebFrontEndImpl) verifyOrder(order *core.Order) *acme.ProblemDetails 
 			continue
 		}
 		if ident.Type == acme.IdentifierOpenIDFederation {
-			if len(idents) > 1 {
-				return acme.MalformedProblem("Orders including OpenID Federation entities may not contain any other identifiers")
-			}
-
 			if _, err := entity.NewIdentifier(ident.Value); err != nil {
 				return acme.MalformedProblem(fmt.Sprintf("Invalid identifier in order: %s", err.Error()))
 			}
@@ -2120,7 +2116,7 @@ func (wfe *WebFrontEndImpl) FinalizeOrder( //nolint:gocyclo,gocognit
 	// split order identifiers per types
 	var orderDNSs []string
 	var orderIPs []net.IP
-	var orderOpenIDFederationIdentifier *entity.Identifier
+	var orderOpenIDFederationIdentifiers []*entity.Identifier
 	for _, ident := range orderIdentifiers {
 		switch ident.Type {
 		case acme.IdentifierDNS:
@@ -2128,13 +2124,7 @@ func (wfe *WebFrontEndImpl) FinalizeOrder( //nolint:gocyclo,gocognit
 		case acme.IdentifierIP:
 			orderIPs = append(orderIPs, net.ParseIP(ident.Value))
 		case acme.IdentifierOpenIDFederation:
-			if len(orderIdentifiers) > 1 {
-				wfe.sendError(acme.MalformedProblem(
-					"Order containing OpenID Federation identifier may only contain a single identifier",
-				), response)
-				return
-			}
-			localOrderOpenIDFederationIdentifier, err := entity.NewIdentifier(ident.Value)
+			orderOpenIDFederationIdentifier, err := entity.NewIdentifier(ident.Value)
 			if err != nil {
 				wfe.sendError(acme.MalformedProblem(
 					fmt.Sprintf("Order includes invalid OpenID Federation entity identifier: %s", err.Error()),
@@ -2142,7 +2132,7 @@ func (wfe *WebFrontEndImpl) FinalizeOrder( //nolint:gocyclo,gocognit
 				return
 			}
 
-			orderOpenIDFederationIdentifier = &localOrderOpenIDFederationIdentifier
+			orderOpenIDFederationIdentifiers = append(orderOpenIDFederationIdentifiers, &orderOpenIDFederationIdentifier)
 		default:
 			wfe.sendError(acme.MalformedProblem(
 				fmt.Sprintf("Order includes unknown identifier type %s", ident.Type)), response)
@@ -2156,10 +2146,10 @@ func (wfe *WebFrontEndImpl) FinalizeOrder( //nolint:gocyclo,gocognit
 	// sort and deduplicate CSR SANs
 	csrDNSs := uniqueLowerNames(parsedCSR.DNSNames)
 	csrIPs := uniqueIPs(parsedCSR.IPAddresses)
-	openIDFederationIdentifier, err := openidfederation01.EntityIdentifierFromCSR(parsedCSR)
+	csrOpenIDFederationIdentifiers, err := openidfederation01.EntityIdentifiersFromCSR(parsedCSR)
 	if err != nil {
 		wfe.sendError(acme.MalformedProblem(
-			fmt.Sprintf("CSR does not contain valid OpenID Federation identifier: %s", err.Error()),
+			fmt.Sprintf("CSR does not contain valid OpenID Federation identifiers: %s", err.Error()),
 		), response)
 		return
 	}
@@ -2173,14 +2163,6 @@ func (wfe *WebFrontEndImpl) FinalizeOrder( //nolint:gocyclo,gocognit
 	if len(csrIPs) != len(orderIPs) {
 		wfe.sendError(acme.UnauthorizedProblem(
 			"Order includes different number of IP address identifiers than CSR specifies"), response)
-		return
-	}
-
-	if orderOpenIDFederationIdentifier != nil && (len(csrIPs) > 0 || len(csrDNSs) > 0) {
-		// ACME 7.4 makes it clear that badCSR should be used in this case, not sure why Pebble uses
-		// UnauthorizedProblem elsewhere
-		wfe.sendError(acme.BadCSRProblem(
-			"CSR containing OpenID Federation identifier should only contain otherName SAN"), response)
 		return
 	}
 
@@ -2199,10 +2181,13 @@ func (wfe *WebFrontEndImpl) FinalizeOrder( //nolint:gocyclo,gocognit
 			return
 		}
 	}
-	if !orderOpenIDFederationIdentifier.Equals(openIDFederationIdentifier) {
-		wfe.sendError(acme.MalformedProblem(
-			"order and CSR OpenID Federation identifier differ"), response)
-		return
+	for i, identifier := range orderOpenIDFederationIdentifiers {
+		if !csrOpenIDFederationIdentifiers[i].Equals(identifier) {
+			wfe.sendError(acme.MalformedProblem(
+				fmt.Sprintf("CSR is missing Order OpenID Federation identifier %q", identifier)),
+				response)
+			return
+		}
 	}
 
 	// No account key signing RFC8555 Section 11.1

@@ -442,10 +442,14 @@ func (ca *CAImpl) CompleteOrder(order *core.Order) {
 		extensions = append(extensions, ocspMustStapleExt)
 	}
 
+	// If any of the identifiers in the order is an OpenID Federation entity,
+	// then we copy the SAN extension out of the CSR (which will include
+	// otherNames for each OIDF identifier) and include that in the cert.
 	for _, identifier := range order.Identifiers {
 		if identifier.Type != acme.IdentifierOpenIDFederation {
 			continue
 		}
+
 		sanExtension := sanExtension(order.ParsedCSR.Extensions)
 		if sanExtension == nil {
 			// Should never happen, as the CSR was validated previously
@@ -453,14 +457,20 @@ func (ca *CAImpl) CompleteOrder(order *core.Order) {
 				"order contains OpenID Federation identifier, but no SAN extension was found in CSR")
 			return
 		}
-		// Unlike the OCSPMustStaple extension, we copy the SAN over wholesale from the CSR, and
-		// assume that it's validity (e.g. that it's an otherName with id-on-openfederationid) has
-		// already been checked.
+
+		// Unlike the OCSPMustStaple extension, we copy the SAN over wholesale
+		// from the CSR, and assume that it's validity (e.g. that it's an
+		// otherName with id-on-openfederationid) has already been checked.
 		extensions = append(extensions, *sanExtension)
+
+		// The one SAN will contain all the OIDF entities, so don't duplicate
+		// the SAN extension by iterating over more ACME identifiers
+		break
 	}
 
 	// issue a certificate for the csr
 	csr := order.ParsedCSR
+
 	cert, err := ca.newCertificate(csr.DNSNames, csr.IPAddresses, csr.PublicKey, order.AccountID, order.NotBefore, order.NotAfter, order.Profile, extensions)
 	if err != nil {
 		ca.log.Printf("Error: unable to issue order: %s", err.Error())
