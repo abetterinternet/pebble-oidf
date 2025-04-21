@@ -23,10 +23,6 @@
         "validityPeriod": 518400
       }
     },
-    "openIDFederation": {
-      "identifier": "http://localhost:8004",
-      "trustAnchors": ["http://localhost:8001"],
-      "superiors": ["http://localhost:8002"]
-    }
+    "openIDFederationIdentifier": "http://localhost:8004"
   }
 }

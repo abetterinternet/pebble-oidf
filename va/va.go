@@ -113,7 +113,7 @@ type VAImpl struct {
 	strict             bool
 	customResolverAddr string
 	dnsClient          *dns.Client
-	oidfEntity         *entity.Entity
+	oidfEntity         *entity.FederationEndpoints
 
 	// The VA having a DB client is indeed strange. This is only used to
 	// facilitate va.setOrderError changing the ARI related order replacement
@@ -125,7 +125,7 @@ func New(
 	log *log.Logger,
 	httpPort, tlsPort int,
 	strict bool, customResolverAddr string,
-	oidfEntity *entity.Entity,
+	oidfEntity *entity.FederationEndpoints,
 	db *db.MemoryStore,
 ) *VAImpl {
 	va := &VAImpl{
@@ -768,7 +768,7 @@ func (va VAImpl) validateOpenIDFederation01(task *vaTask) *core.ValidationRecord
 	if chalResp.TrustChain != nil {
 		trustChain, trustErr = va.oidfEntity.EvaluateTrustChain(chalResp.TrustChain)
 	} else {
-		trustChain, trustErr = va.oidfEntity.EvaluateTrust(requestorEntity)
+		trustChain, trustErr = va.oidfEntity.IsTrusted(requestorEntity)
 	}
 	if trustErr != nil {
 		result.Error = acme.UnauthorizedProblem(

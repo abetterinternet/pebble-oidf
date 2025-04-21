@@ -12,19 +12,21 @@ const (
 	StatusReady       = "ready"
 	StatusDeactivated = "deactivated"
 
-	IdentifierDNS              = "dns"
-	IdentifierIP               = "ip"
-	IdentifierOpenIDFederation = "openid-federation"
+	IdentifierDNS = "dns"
+	IdentifierIP  = "ip"
 
-	ChallengeHTTP01             = "http-01"
-	ChallengeTLSALPN01          = "tls-alpn-01"
-	ChallengeDNS01              = "dns-01"
-	ChallengeDNSAccount01       = "dns-account-01"
-	ChallengeOpenIDFederation01 = "openid-federation-01"
+	ChallengeHTTP01       = "http-01"
+	ChallengeTLSALPN01    = "tls-alpn-01"
+	ChallengeDNS01        = "dns-01"
+	ChallengeDNSAccount01 = "dns-account-01"
 
 	HTTP01BaseURL = ".well-known/acme-challenge/"
 
 	ACMETLS1Protocol = "acme-tls/1"
+
+	// Constants for draft-demarco-acme-openid-federation
+	IdentifierOpenIDFederation  = "openid-federation"
+	ChallengeOpenIDFederation01 = "openid-federation-01"
 )
 
 type Identifier struct {

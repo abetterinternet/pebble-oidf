@@ -112,7 +112,7 @@ func makeKey() (*rsa.PrivateKey, []byte, error) {
 	return key, ski, nil
 }
 
-// sanExtension finds the first SubjectAlternativeName among the provided extension and returns it,
+// sanExtension finds the first SubjectAlternativeName among the provided extensions and returns it,
 // or nil if no SAN is found.
 func sanExtension(extensions []pkix.Extension) *pkix.Extension {
 	for _, extension := range extensions {
@@ -459,7 +459,7 @@ func (ca *CAImpl) CompleteOrder(order *core.Order) {
 		}
 
 		// Unlike the OCSPMustStaple extension, we copy the SAN over wholesale
-		// from the CSR, and assume that it's validity (e.g. that it's an
+		// from the CSR, and assume that its validity (e.g. that it's an
 		// otherName with id-on-openfederationid) has already been checked.
 		extensions = append(extensions, *sanExtension)
 

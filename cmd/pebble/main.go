@@ -40,13 +40,10 @@ type config struct {
 			Order int
 		}
 
+		OpenIDFederationIdentifier string
+
 		// Deprecated: use Profiles.ValidityPeriod instead
 		CertificateValidityPeriod uint64
-		OpenIDFederation          struct {
-			Identifier   string
-			TrustAnchors []string
-			Superiors    []string
-		}
 	}
 }
 
@@ -119,34 +116,15 @@ func main() {
 		}
 	}
 
-	acmeDirectory := fmt.Sprintf("https://%s%s", c.Pebble.ListenAddress, wfe.DirectoryPath)
-
-	var issuer *entity.Entity
-	if c.Pebble.OpenIDFederation.Identifier != "" {
-		// Create an acme_issuer OIDF entity for Pebble to serve, and subordinate it to the
-		// superiors in the config
-		var err error
-		issuer, err = entity.NewAndServe(c.Pebble.OpenIDFederation.Identifier, entity.EntityOptions{
-			TrustAnchors: c.Pebble.OpenIDFederation.TrustAnchors,
-			ACMEIssuer:   &entity.ACMEIssuerOptions{DirectoryURL: acmeDirectory},
-		})
-		cmd.FailOnError(err, "Failed to set up OpenID Federation entity for acme_issuer")
-		defer issuer.CleanUp()
-
+	var issuer *entity.FederationEndpoints
+	if c.Pebble.OpenIDFederationIdentifier != "" {
+		// We assume that something else has taken responsibility for constructing the OIDF entity
+		// and making its endpoints available.
+		issuerIdentifier, err := entity.NewIdentifier(c.Pebble.OpenIDFederationIdentifier)
+		cmd.FailOnError(err, "bad OIDF identifier for issuer")
 		oidfClient := entity.NewOIDFClient()
-
-		for _, superior := range c.Pebble.OpenIDFederation.Superiors {
-			superiorIdentifier, err := entity.NewIdentifier(superior)
-			cmd.FailOnError(err, "bad superior OIDF identifier")
-			superiorClient, err := oidfClient.NewFederationEndpoints(superiorIdentifier)
-			cmd.FailOnError(err, "failed to create federation endpoints")
-
-			err = superiorClient.AddSubordinates([]entity.Identifier{issuer.Identifier})
-			cmd.FailOnError(err, "failed to subordinate issuer entity")
-			issuer.AddSuperior(superiorIdentifier)
-		}
-
-		logger.Printf("OpenIDFederation endpoints listening on %s\n", c.Pebble.OpenIDFederation.Identifier)
+		issuer, err = oidfClient.NewFederationEndpoints(issuerIdentifier)
+		cmd.FailOnError(err, "failed to create federation endpoints")
 	}
 
 	db := db.NewMemoryStore()
@@ -188,7 +166,8 @@ func main() {
 	}
 
 	logger.Printf("Listening on: %s\n", c.Pebble.ListenAddress)
-	logger.Printf("ACME directory available at: %s", acmeDirectory)
+	logger.Printf("ACME directory available at https://%s%s",
+		c.Pebble.ListenAddress, wfe.DirectoryPath)
 	err = http.ListenAndServeTLS(
 		c.Pebble.ListenAddress,
 		c.Pebble.Certificate,
