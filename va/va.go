@@ -762,20 +762,24 @@ func (va VAImpl) validateOpenIDFederation01(task *vaTask) *core.ValidationRecord
 		return result
 	}
 
-	var trustErr error
 	var trustChain []entity.EntityStatement
 
 	if chalResp.TrustChain != nil {
-		trustChain, trustErr = va.oidfEntity.EvaluateTrustChain(chalResp.TrustChain)
+		panic("nothing exposed yet to evaluate trust chain")
 	} else {
-		trustChain, trustErr = va.oidfEntity.IsTrusted(requestorEntity)
-	}
-	if trustErr != nil {
-		result.Error = acme.UnauthorizedProblem(
-			fmt.Sprintf("could not establish OpenID Federation trust for '%s': %s",
-				task.Identifier.Value, err),
+		resolveResponse, err := va.oidfEntity.Resolve(
+			requestorEntity,
+			va.oidfEntity.Entity.AuthorityHints,
+			[]entity.EntityTypeIdentifier{entity.ACMERequestor},
 		)
-		return result
+		if err != nil {
+			result.Error = acme.UnauthorizedProblem(
+				fmt.Sprintf("could not resolve OpenID Federation trust for '%s': %s",
+					task.Identifier.Value, err),
+			)
+		}
+
+		trustChain = resolveResponse.TrustChain
 	}
 
 	if err := trustChain[0].VerifyChallenge(chalResp.Sig, task.Challenge.Token); err != nil {
