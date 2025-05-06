@@ -34,7 +34,6 @@ import (
 	"github.com/letsencrypt/pebble/v2/core"
 	"github.com/letsencrypt/pebble/v2/db"
 	"github.com/letsencrypt/pebble/v2/va"
-	"github.com/tgeoghegan/oidf-box/entity"
 	"github.com/tgeoghegan/oidf-box/openidfederation01"
 )
 
@@ -1451,9 +1450,6 @@ func (wfe *WebFrontEndImpl) verifyOrder(order *core.Order) *acme.ProblemDetails 
 			continue
 		}
 		if ident.Type == acme.IdentifierOpenIDFederation {
-			if _, err := entity.NewIdentifier(ident.Value); err != nil {
-				return acme.MalformedProblem(fmt.Sprintf("Invalid identifier in order: %s", err.Error()))
-			}
 			continue
 		}
 		if ident.Type != acme.IdentifierDNS {
@@ -2116,7 +2112,7 @@ func (wfe *WebFrontEndImpl) FinalizeOrder( //nolint:gocyclo,gocognit
 	// split order identifiers per types
 	var orderDNSs []string
 	var orderIPs []net.IP
-	var orderOpenIDFederationIdentifiers []*entity.Identifier
+	var orderOpenIDFederationIdentifiers []string
 	for _, ident := range orderIdentifiers {
 		switch ident.Type {
 		case acme.IdentifierDNS:
@@ -2124,15 +2120,7 @@ func (wfe *WebFrontEndImpl) FinalizeOrder( //nolint:gocyclo,gocognit
 		case acme.IdentifierIP:
 			orderIPs = append(orderIPs, net.ParseIP(ident.Value))
 		case acme.IdentifierOpenIDFederation:
-			orderOpenIDFederationIdentifier, err := entity.NewIdentifier(ident.Value)
-			if err != nil {
-				wfe.sendError(acme.MalformedProblem(
-					fmt.Sprintf("Order includes invalid OpenID Federation entity identifier: %s", err.Error()),
-				), response)
-				return
-			}
-
-			orderOpenIDFederationIdentifiers = append(orderOpenIDFederationIdentifiers, &orderOpenIDFederationIdentifier)
+			orderOpenIDFederationIdentifiers = append(orderOpenIDFederationIdentifiers, ident.Value)
 		default:
 			wfe.sendError(acme.MalformedProblem(
 				fmt.Sprintf("Order includes unknown identifier type %s", ident.Type)), response)
@@ -2182,7 +2170,7 @@ func (wfe *WebFrontEndImpl) FinalizeOrder( //nolint:gocyclo,gocognit
 		}
 	}
 	for i, identifier := range orderOpenIDFederationIdentifiers {
-		if !csrOpenIDFederationIdentifiers[i].Equals(identifier) {
+		if csrOpenIDFederationIdentifiers[i] != identifier {
 			wfe.sendError(acme.MalformedProblem(
 				fmt.Sprintf("CSR is missing Order OpenID Federation identifier %q", identifier)),
 				response)

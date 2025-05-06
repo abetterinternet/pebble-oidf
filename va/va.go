@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/miekg/dns"
-	"github.com/tgeoghegan/oidf-box/entity"
+	"github.com/tgeoghegan/oidf-box/oidfclient"
 	"github.com/tgeoghegan/oidf-box/openidfederation01"
 
 	"github.com/letsencrypt/challtestsrv"
@@ -113,7 +113,7 @@ type VAImpl struct {
 	strict             bool
 	customResolverAddr string
 	dnsClient          *dns.Client
-	oidfEntity         *entity.FederationEndpoints
+	oidfEntity         *oidfclient.FederationEndpoints
 
 	// The VA having a DB client is indeed strange. This is only used to
 	// facilitate va.setOrderError changing the ARI related order replacement
@@ -125,7 +125,7 @@ func New(
 	log *log.Logger,
 	httpPort, tlsPort int,
 	strict bool, customResolverAddr string,
-	oidfEntity *entity.FederationEndpoints,
+	oidfEntity *oidfclient.FederationEndpoints,
 	db *db.MemoryStore,
 ) *VAImpl {
 	va := &VAImpl{
@@ -753,36 +753,35 @@ func (va VAImpl) validateOpenIDFederation01(task *vaTask) *core.ValidationRecord
 		return result
 	}
 
-	requestorEntity, err := entity.NewIdentifier(task.Identifier.Value)
-	if err != nil {
-		result.Error = acme.UnauthorizedProblem(
-			fmt.Sprintf("failed to construct OpenID Federation identifier for '%s': %s",
-				task.Identifier.Value, err),
-		)
-		return result
-	}
-
-	var trustChain []entity.EntityStatement
+	var acmeRequestorMetadata openidfederation01.ACMERequestorMetadata
 
 	if chalResp.TrustChain != nil {
 		panic("nothing exposed yet to evaluate trust chain")
 	} else {
 		resolveResponse, err := va.oidfEntity.Resolve(
-			requestorEntity,
+			task.Identifier.Value,
 			va.oidfEntity.Entity.AuthorityHints,
-			[]entity.EntityTypeIdentifier{entity.ACMERequestor},
+			[]string{openidfederation01.ACMERequestorEntityType},
 		)
 		if err != nil {
 			result.Error = acme.UnauthorizedProblem(
 				fmt.Sprintf("could not resolve OpenID Federation trust for '%s': %s",
 					task.Identifier.Value, err),
 			)
+			return result
 		}
-
-		trustChain = resolveResponse.TrustChain
+		if err := resolveResponse.Metadata.FindEntityMetadata(
+			openidfederation01.ACMERequestorEntityType,
+			&acmeRequestorMetadata,
+		); err != nil {
+			result.Error = acme.UnauthorizedProblem(
+				fmt.Sprintf("no or malformed ACME requestor metadata in resolve response: %s", err),
+			)
+			return result
+		}
 	}
 
-	if err := trustChain[0].VerifyChallenge(chalResp.Sig, task.Challenge.Token); err != nil {
+	if err := acmeRequestorMetadata.VerifyChallenge(chalResp.Sig, task.Challenge.Token); err != nil {
 		result.Error = acme.UnauthorizedProblem(fmt.Sprintf("could not verify challenge: %s", err))
 		return result
 	}

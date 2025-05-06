@@ -14,7 +14,6 @@ import (
 	"github.com/letsencrypt/pebble/v2/db"
 	"github.com/letsencrypt/pebble/v2/va"
 	"github.com/letsencrypt/pebble/v2/wfe"
-	"github.com/tgeoghegan/oidf-box/entity"
 )
 
 var version = "dev" // Default value, to be overridden with ldflags
@@ -116,20 +115,9 @@ func main() {
 		}
 	}
 
-	var issuer *entity.FederationEndpoints
-	if c.Pebble.OpenIDFederationIdentifier != "" {
-		// We assume that something else has taken responsibility for constructing the OIDF entity
-		// and making its endpoints available.
-		issuerIdentifier, err := entity.NewIdentifier(c.Pebble.OpenIDFederationIdentifier)
-		cmd.FailOnError(err, "bad OIDF identifier for issuer")
-		oidfClient := entity.NewOIDFClient()
-		issuer, err = oidfClient.NewFederationEndpoints(issuerIdentifier)
-		cmd.FailOnError(err, "failed to create federation endpoints")
-	}
-
 	db := db.NewMemoryStore()
 	ca := ca.New(logger, db, c.Pebble.OCSPResponderURL, alternateRoots, chainLength, profiles)
-	va := va.New(logger, c.Pebble.HTTPPort, c.Pebble.TLSPort, *strictMode, *resolverAddress, issuer, db)
+	va := va.New(logger, c.Pebble.HTTPPort, c.Pebble.TLSPort, *strictMode, *resolverAddress, nil, db)
 
 	for keyID, key := range c.Pebble.ExternalAccountMACKeys {
 		err := db.AddExternalAccountKeyByID(keyID, key)
