@@ -6,7 +6,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.0.5
 	github.com/letsencrypt/challtestsrv v1.3.2
 	github.com/miekg/dns v1.1.64
-	github.com/tgeoghegan/oidf-box v0.0.1
+	github.com/tgeoghegan/oidf-box v0.0.0-20250519230951-6b44a9142bd2
 	github.com/zachmann/go-oidfed v0.3.1
 )
 
@@ -47,6 +47,4 @@ require (
 	tideland.dev/go/slices v0.2.0 // indirect
 )
 
-replace github.com/tgeoghegan/oidf-box => ../oidf-box
-
-replace github.com/zachmann/go-oidfed => ../go-oidfed
+replace github.com/zachmann/go-oidfed => github.com/tgeoghegan/go-oidfed v0.0.0-20250507182343-dc509506516f
