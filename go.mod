@@ -7,6 +7,7 @@ require (
 	github.com/letsencrypt/challtestsrv v1.3.2
 	github.com/miekg/dns v1.1.64
 	github.com/tgeoghegan/oidf-box v0.0.1
+	github.com/zachmann/go-oidfed v0.3.1
 )
 
 require (
@@ -34,7 +35,6 @@ require (
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
-	github.com/zachmann/go-oidfed v0.3.1 // indirect
 	golang.org/x/crypto v0.37.0 // indirect
 	golang.org/x/exp v0.0.0-20241210194714-1829a127f884 // indirect
 	golang.org/x/mod v0.23.0 // indirect

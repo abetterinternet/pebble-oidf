@@ -171,6 +171,8 @@ type WebFrontEndImpl struct {
 	requireEAB        bool
 	retryAfterAuthz   int
 	retryAfterOrder   int
+	// oidfTrustAnchors is a list of OIDF entities anchoring this entity's trust
+	oidfTrustAnchors []string
 }
 
 const ToSURL = "data:text/plain,Do%20what%20thou%20wilt"
@@ -241,6 +243,10 @@ func New(
 		retryAfterAuthz:   retryAfterAuthz,
 		retryAfterOrder:   retryAfterOrder,
 	}
+}
+
+func (wfe *WebFrontEndImpl) SetOIDFTrustAnchors(trustAnchors []string) {
+	wfe.oidfTrustAnchors = trustAnchors
 }
 
 func (wfe *WebFrontEndImpl) HandleFunc(
@@ -1595,15 +1601,23 @@ func (wfe *WebFrontEndImpl) makeChallenge(
 ) (*core.Challenge, error) {
 	// Create a new challenge of the requested type
 	id := newToken()
+	innerChallenge := acme.Challenge{
+		Type:   chalType,
+		Token:  newToken(),
+		URL:    wfe.relativeEndpoint(request, fmt.Sprintf("%s%s", challengePath, id)),
+		Status: acme.StatusPending,
+	}
+
+	if chalType == acme.ChallengeOpenIDFederation01 {
+		// Provide trust anchors in challenge so solver can figure out what chain to construct
+		// https://github.com/peppelinux/draft-demarco-acme-openid-federation/pull/80
+		innerChallenge.TrustAnchors = wfe.oidfTrustAnchors
+	}
+
 	chal := &core.Challenge{
-		ID: id,
-		Challenge: acme.Challenge{
-			Type:   chalType,
-			Token:  newToken(),
-			URL:    wfe.relativeEndpoint(request, fmt.Sprintf("%s%s", challengePath, id)),
-			Status: acme.StatusPending,
-		},
-		Authz: authz,
+		ID:        id,
+		Challenge: innerChallenge,
+		Authz:     authz,
 	}
 
 	// Add it to the in-memory database

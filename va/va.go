@@ -26,6 +26,7 @@ import (
 	"github.com/miekg/dns"
 	"github.com/tgeoghegan/oidf-box/oidfclient"
 	"github.com/tgeoghegan/oidf-box/openidfederation01"
+	oidf "github.com/zachmann/go-oidfed/pkg"
 
 	"github.com/letsencrypt/challtestsrv"
 	"github.com/letsencrypt/pebble/v2/acme"
@@ -114,6 +115,8 @@ type VAImpl struct {
 	customResolverAddr string
 	dnsClient          *dns.Client
 	oidfEntity         *oidfclient.FederationEndpoints
+	// oidfTrustAnchors is a list of OIDF entities anchoring this entity's trust
+	oidfTrustAnchors []string
 
 	// The VA having a DB client is indeed strange. This is only used to
 	// facilitate va.setOrderError changing the ARI related order replacement
@@ -126,6 +129,7 @@ func New(
 	httpPort, tlsPort int,
 	strict bool, customResolverAddr string,
 	oidfEntity *oidfclient.FederationEndpoints,
+	oidfTrustAnchors []string,
 	db *db.MemoryStore,
 ) *VAImpl {
 	va := &VAImpl{
@@ -138,6 +142,7 @@ func New(
 		strict:             strict,
 		customResolverAddr: customResolverAddr,
 		oidfEntity:         oidfEntity,
+		oidfTrustAnchors:   oidfTrustAnchors,
 		db:                 db,
 	}
 
@@ -753,14 +758,28 @@ func (va VAImpl) validateOpenIDFederation01(task *vaTask) *core.ValidationRecord
 		return result
 	}
 
-	var acmeRequestorMetadata openidfederation01.ACMERequestorMetadata
+	var requestorMetadata *oidf.Metadata
 
 	if chalResp.TrustChain != nil {
-		panic("nothing exposed yet to evaluate trust chain")
+		trustChain, err := oidfclient.ValidateTrustChain(
+			task.Identifier.Value,
+			va.oidfTrustAnchors,
+			chalResp.TrustChain,
+		)
+		if err != nil {
+			result.Error = acme.UnauthorizedProblem(
+				fmt.Sprintf("could not validate trust chain provided by requestor for '%s': %s",
+					task.Identifier.Value, err))
+			return result
+		}
+
+		// trustChain[0] is the entity configuration. trustChain[1] is the end of the trust chain,
+		// which has federation metadata policy applied to it.
+		requestorMetadata = trustChain[1].Metadata
 	} else {
 		resolveResponse, err := va.oidfEntity.Resolve(
 			task.Identifier.Value,
-			va.oidfEntity.Entity.AuthorityHints,
+			va.oidfTrustAnchors,
 			[]string{openidfederation01.ACMERequestorEntityType},
 		)
 		if err != nil {
@@ -770,15 +789,18 @@ func (va VAImpl) validateOpenIDFederation01(task *vaTask) *core.ValidationRecord
 			)
 			return result
 		}
-		if err := resolveResponse.Metadata.FindEntityMetadata(
-			openidfederation01.ACMERequestorEntityType,
-			&acmeRequestorMetadata,
-		); err != nil {
-			result.Error = acme.UnauthorizedProblem(
-				fmt.Sprintf("no or malformed ACME requestor metadata in resolve response: %s", err),
-			)
-			return result
-		}
+		requestorMetadata = resolveResponse.Metadata
+	}
+
+	var acmeRequestorMetadata openidfederation01.ACMERequestorMetadata
+	if err := requestorMetadata.FindEntityMetadata(
+		openidfederation01.ACMERequestorEntityType,
+		&acmeRequestorMetadata,
+	); err != nil {
+		result.Error = acme.UnauthorizedProblem(
+			fmt.Sprintf("no or malformed ACME requestor metadata in resolve response metadata %+v: %s", requestorMetadata, err),
+		)
+		return result
 	}
 
 	if err := acmeRequestorMetadata.VerifyChallenge(chalResp.Sig, task.Challenge.Token); err != nil {
