@@ -1862,6 +1862,8 @@ func (wfe *WebFrontEndImpl) orderForDisplay(
 	// Copy the initial OrderRequest from the internal order object to mutate and
 	// use as the result.
 	result := order.Order
+	result.Identifiers = slices.Clone(order.Order.Identifiers)
+	result.Authorizations = slices.Clone(order.Order.Authorizations)
 
 	// Randomize the order of the order authorization URLs as well as the order's
 	// identifiers. ACME draft Section 7.4 "Applying for Certificate Issuance"
