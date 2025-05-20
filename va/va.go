@@ -100,7 +100,7 @@ type vaTask struct {
 	Account           *core.Account
 	AccountURL        string
 	Wildcard          bool
-	ChallengeResponse []byte
+	ChallengeResponse *[]byte
 }
 
 type VAImpl struct {
@@ -180,14 +180,21 @@ func New(
 	return va
 }
 
-func (va VAImpl) ValidateChallenge(ident acme.Identifier, chal *core.Challenge, acct *core.Account, acctURL string, wildcard bool, chalResp []byte) {
+func (va VAImpl) ValidateChallenge(
+	ident acme.Identifier,
+	chal *core.Challenge,
+	acct *core.Account,
+	acctURL string,
+	wildcard bool,
+	chalResp []byte,
+) {
 	task := &vaTask{
 		Identifier:        ident,
 		Challenge:         chal,
 		Account:           acct,
 		AccountURL:        acctURL,
 		Wildcard:          wildcard,
-		ChallengeResponse: chalResp,
+		ChallengeResponse: &chalResp,
 	}
 	// Submit the task for validation
 	va.tasks <- task
@@ -745,7 +752,7 @@ func (va VAImpl) validateOpenIDFederation01(task *vaTask) *core.ValidationRecord
 	// and optionally `trust_chain`
 	// https://peppelinux.github.io/draft-demarco-acme-openid-federation/draft-demarco-acme-openid-federation.html#section-6.6
 	var chalResp openidfederation01.ChallengeResponse
-	if err := json.Unmarshal(task.ChallengeResponse, &chalResp); err != nil {
+	if err := json.Unmarshal(*task.ChallengeResponse, &chalResp); err != nil {
 		// For error responses, the acme-openid draft punts to RFC 8555 7.5.1. That in turn is not
 		// particularly prescriptive, just saying "the server MUST return an HTTP error". A
 		// malformed problem document seems appropriate but HTTP 400 would suffice.
