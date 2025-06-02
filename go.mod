@@ -7,7 +7,7 @@ require (
 	github.com/letsencrypt/challtestsrv v1.3.2
 	github.com/miekg/dns v1.1.64
 	github.com/tgeoghegan/oidf-box v0.0.0-20250519230951-6b44a9142bd2
-	github.com/zachmann/go-oidfed v0.3.1
+	github.com/zachmann/go-oidfed v0.3.2-0.20250602062824-fda2357fd2a7
 )
 
 require (
@@ -23,28 +23,26 @@ require (
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/jarcoal/httpmock v1.4.0 // indirect
-	github.com/lestrrat-go/blackmagic v1.0.2 // indirect
+	github.com/lestrrat-go/blackmagic v1.0.3 // indirect
 	github.com/lestrrat-go/httpcc v1.0.1 // indirect
-	github.com/lestrrat-go/httprc/v3 v3.0.0-beta1 // indirect
-	github.com/lestrrat-go/jwx/v3 v3.0.0 // indirect
+	github.com/lestrrat-go/httprc/v3 v3.0.0-beta2 // indirect
+	github.com/lestrrat-go/jwx/v3 v3.0.1 // indirect
 	github.com/lestrrat-go/option v1.0.1 // indirect
 	github.com/lithammer/fuzzysearch v1.1.8 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/redis/go-redis/v9 v9.7.3 // indirect
+	github.com/redis/go-redis/v9 v9.9.0 // indirect
 	github.com/scylladb/go-set v1.0.3-0.20200225121959-cc7b2070d91e // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
-	golang.org/x/crypto v0.37.0 // indirect
+	golang.org/x/crypto v0.38.0 // indirect
 	golang.org/x/exp v0.0.0-20241210194714-1829a127f884 // indirect
 	golang.org/x/mod v0.23.0 // indirect
 	golang.org/x/net v0.38.0 // indirect
-	golang.org/x/sync v0.13.0 // indirect
-	golang.org/x/sys v0.32.0 // indirect
-	golang.org/x/text v0.24.0 // indirect
+	golang.org/x/sync v0.14.0 // indirect
+	golang.org/x/sys v0.33.0 // indirect
+	golang.org/x/text v0.25.0 // indirect
 	golang.org/x/tools v0.30.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	tideland.dev/go/slices v0.2.0 // indirect
 )
-
-replace github.com/zachmann/go-oidfed => github.com/tgeoghegan/go-oidfed v0.0.0-20250507182343-dc509506516f
