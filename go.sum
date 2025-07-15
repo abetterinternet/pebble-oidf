@@ -1,7 +1,7 @@
 github.com/TwiN/gocache/v2 v2.2.2 h1:4HToPfDV8FSbaYO5kkbhLpEllUYse5rAf+hVU/mSsuI=
 github.com/TwiN/gocache/v2 v2.2.2/go.mod h1:WfIuwd7GR82/7EfQqEtmLFC3a2vqaKbs4Pe6neB7Gyc=
-github.com/abetterinternet/oidf-box v0.0.0-20250715203145-9addc5702cba h1:ixx7lMEG/7f3Zsnh5yaQRIldIMfaT0VNRmR21zfqm8U=
-github.com/abetterinternet/oidf-box v0.0.0-20250715203145-9addc5702cba/go.mod h1:gMXsQ6qBEny+CSfqFSEkasnUnvO59Q8P7oeWIeT3+fE=
+github.com/abetterinternet/oidf-box v0.0.0-20250715205828-1ef62e00f888 h1:qjZLubLilsHIwtMpRH5mph6Rq/zgMngpbDsZJA0SSzE=
+github.com/abetterinternet/oidf-box v0.0.0-20250715205828-1ef62e00f888/go.mod h1:Ooz1ZVNiWXuxzOB0f2AaIVvGVow5UTRiez48EDxo0PM=
 github.com/adam-hanna/arrayOperations v1.0.1 h1:iAot3I2p4yKrFk8eRhEkuHj0ttOrfFJMWAo7Is/rHwk=
 github.com/adam-hanna/arrayOperations v1.0.1/go.mod h1:nScFkGwh89OyLY/cnXdx/S1maSqxhSXz38so1JxsChQ=
 github.com/bsm/ginkgo/v2 v2.12.0 h1:Ny8MWAHyOepLGlLKYmXG4IEkioBysk6GpaRTLC8zwWs=

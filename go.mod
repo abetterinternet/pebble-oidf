@@ -5,7 +5,7 @@ go 1.24
 toolchain go1.24.3
 
 require (
-	github.com/abetterinternet/oidf-box v0.0.0-20250715203145-9addc5702cba
+	github.com/abetterinternet/oidf-box v0.0.0-20250715205828-1ef62e00f888
 	github.com/go-jose/go-jose/v4 v4.1.0
 	github.com/letsencrypt/challtestsrv v1.3.2
 	github.com/miekg/dns v1.1.64
