@@ -1,12 +1,14 @@
 module github.com/letsencrypt/pebble/v2
 
-go 1.23.5
+go 1.24
+
+toolchain go1.24.3
 
 require (
-	github.com/go-jose/go-jose/v4 v4.0.5
+	github.com/abetterinternet/oidf-box v0.0.0-20250715203145-9addc5702cba
+	github.com/go-jose/go-jose/v4 v4.1.0
 	github.com/letsencrypt/challtestsrv v1.3.2
 	github.com/miekg/dns v1.1.64
-	github.com/tgeoghegan/oidf-box v0.0.0-20250519230951-6b44a9142bd2
 	github.com/zachmann/go-oidfed v0.3.2-0.20250602062824-fda2357fd2a7
 )
 
@@ -37,12 +39,12 @@ require (
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	golang.org/x/crypto v0.38.0 // indirect
 	golang.org/x/exp v0.0.0-20241210194714-1829a127f884 // indirect
-	golang.org/x/mod v0.23.0 // indirect
-	golang.org/x/net v0.38.0 // indirect
+	golang.org/x/mod v0.24.0 // indirect
+	golang.org/x/net v0.40.0 // indirect
 	golang.org/x/sync v0.14.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/text v0.25.0 // indirect
-	golang.org/x/tools v0.30.0 // indirect
+	golang.org/x/tools v0.33.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	tideland.dev/go/slices v0.2.0 // indirect
 )

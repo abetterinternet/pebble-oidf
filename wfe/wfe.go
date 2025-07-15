@@ -29,12 +29,12 @@ import (
 
 	"github.com/go-jose/go-jose/v4"
 
+	"github.com/abetterinternet/oidf-box/openidfederation01"
 	"github.com/letsencrypt/pebble/v2/acme"
 	"github.com/letsencrypt/pebble/v2/ca"
 	"github.com/letsencrypt/pebble/v2/core"
 	"github.com/letsencrypt/pebble/v2/db"
 	"github.com/letsencrypt/pebble/v2/va"
-	"github.com/tgeoghegan/oidf-box/openidfederation01"
 )
 
 const (

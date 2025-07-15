@@ -23,9 +23,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abetterinternet/oidf-box/oidfclient"
+	"github.com/abetterinternet/oidf-box/openidfederation01"
 	"github.com/miekg/dns"
-	"github.com/tgeoghegan/oidf-box/oidfclient"
-	"github.com/tgeoghegan/oidf-box/openidfederation01"
 	oidf "github.com/zachmann/go-oidfed/pkg"
 
 	"github.com/letsencrypt/challtestsrv"

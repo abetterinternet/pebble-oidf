@@ -19,6 +19,15 @@ Pebble is **NOT INTENDED FOR PRODUCTION USE**. Pebble is for **testing only**.
 By design Pebble will drop all of its state between invocations and will
 randomize keys/certificates used for issuance.
 
+## This is not the real Pebble!
+
+This is a fork of Pebble created in support of [ISRG's research into digital identity][di-blog]. All
+of the warnings above apply, but on top of that, this fork is *not kept up to date*. If you want to
+test ACME certificate issuance, check out the [real Pebble][real-pebble].
+
+[di-blog]: https://www.abetterinternet.org/post/humandigitalidentityspace/
+[real-pebble]: https://github.com/letsencrypt/pebble/
+
 ## Goals
 
 Pebble has several top level goals:
